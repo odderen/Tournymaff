@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# Set the input and output directories
+check_dir="/check"
+sovs_dir="/sovs"
+dest_dir="/dest"
+
+# Set the path to the checksums file
+checksums_file="checksums.json"
+
+# Generate the checksums for all files in the /check directory
+checksums=$(cd "$check_dir" && find . -type f -exec md5sum {} \;)
+
+# Convert the checksums into a JSON object
+json="{\"checksums\":{"
+while read -r line; do
+  checksum=$(echo "$line" | cut -d' ' -f1)
+  filename=$(echo "$line" | cut -d' ' -f2-)
+  json="$json\"$filename\":\"$checksum\","
+done <<< "$checksums"
+json="${json%,}}"
+
+# Write the JSON object to the checksums file
+echo "$json" > "$checksums_file"
+
+# Function to check if a file exists in the checksums list
+file_exists_in_checksums() {
+  local file="$1"
+  local checksum=$(md5sum "$file" | cut -d' ' -f1)
+  echo "$json" | grep -q "\"$file\":\"$checksum\""
+}
+
+# Copy new files from /sovs to /dest and /check
+for file in "$sovs_dir"/*; do
+  filename=$(basename "$file")
+  if ! file_exists_in_checksums "$filename"; then
+    cp "$file" "$dest_dir"
+    cp "$file" "$check_dir"
+    echo "Copied $filename to $dest_dir and $check_dir"
+  fi
+done
